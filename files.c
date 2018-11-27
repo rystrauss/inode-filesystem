@@ -174,7 +174,7 @@ int ifile_read(uint64_t inode_number, char *buffer, uint64_t how_many, uint64_t 
 
     // Otherwise, read the inode's head_pointer_block, and call
     // the pointers_read() function, which will read all the necessary file's blocks
-    pointers_read((pointer_block_t *)entry->head_pointer_block, buffer, how_many, from);
+    pointers_read((pointer_block_t *) entry->head_pointer_block, buffer, how_many, from);
 
     return 0;
 }
@@ -246,31 +246,65 @@ int ifile_write(uint64_t inode_number, void *buffer, uint64_t how_many, uint64_t
     // in this case, call the ifile_grow() function to resize the file.
     if (to + how_many > entry->size) {
         ifile_grow(entry, to + how_many);
+        if (storage_write_block(inode_block, block_buffer) == -1) {
+            return -1;
+        }
     }
 
     // Otherwise, read the inode's head_pointer_block, and call
     // the pointers_write() function, which will overwrite all necessary file's blocks
-    pointers_write((pointer_block_t *)entry->head_pointer_block, buffer, how_many, to);
+    pointers_write((pointer_block_t *) entry->head_pointer_block, buffer, how_many, to);
 
     return 0;
 }
 
 int pointers_write(pointer_block_t *pointers, char *buffer, uint64_t how_many, uint64_t to) {
     // Block number and offset within a block for the first block
+    int first_block_number = to / BLOCK_SIZE;
+    int first_block_offset = to % BLOCK_SIZE;
+
     // Block number and offset within a block for the last block
+    int last_block_number = (to + how_many) / BLOCK_SIZE;
+    int last_block_offset = (to + how_many) % BLOCK_SIZE;
+
+    char block[BLOCK_SIZE];
 
     // If everything can be done in a single block...
-    //   Read the block
-    //   Update the appropriate bytes into the block
-    //   Write the block back to disk since we made changes on it
-    //   All done!
+    if (first_block_number == last_block_number) {
+        //   Read the block
+        storage_read_block(pointers->entry[first_block_number], block);
+        //   Update the appropriate bytes into the block
+        memcpy(buffer, block + first_block_offset, how_many);
+        //   Write the block back to disk since we made changes on it
+        storage_write_block(pointers->entry[first_block_number], block);
+
+        // All done!
+        return 0;
+    }
 
     // Otherwise, we must read from multiple blocks
-
+    uint64_t position = 0;
 
     // Read/Update/Write first block
+    storage_read_block(pointers->entry[first_block_number], block);
+    memcpy(buffer, block + first_block_offset, BLOCK_SIZE - first_block_offset);
+    storage_write_block(pointers->entry[first_block_number], block);
 
     // Read/Update/Write intermediate blocks
+    position += (BLOCK_SIZE - first_block_offset);
+
+    for (int i = first_block_number + 1; i <= last_block_number - 1; i++) {
+        storage_read_block(pointers->entry[i], block);
+        memcpy(buffer + position, block, BLOCK_SIZE);
+        storage_write_block(pointers->entry[i], block);
+
+        position += BLOCK_SIZE;
+    }
 
     // Read/Update/Write last block
+    storage_read_block(pointers->entry[last_block_number], block);
+    memcpy(buffer + position, block, last_block_offset);
+    storage_write_block(pointers->entry[last_block_number], block);
+
+    return 0;
 }
