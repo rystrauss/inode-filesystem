@@ -81,7 +81,7 @@ int ifile_read(uint64_t inode_number, char *buffer, uint64_t how_many, uint64_t 
  * @param inode_number Inode of the file we write to.
  * @param buffer Buffer were we read from.
  * @param how_many The amount of bytes we read from the buffer.
- * @param from The initial position of the file where we write to.
+ * @param to The initial position of the file where we write to.
  *
  * @return 0 on success, -1 otherwise.
  */

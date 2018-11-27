@@ -229,16 +229,30 @@ int pointers_read(pointer_block_t *pointers, char *buffer, uint64_t how_many, ui
 int ifile_write(uint64_t inode_number, void *buffer, uint64_t how_many, uint64_t to) {
     // Calculate the block storing the inode_number
     // Calculate the offset within the block containing the inode_number
+    uint64_t inode_block = inode_number / BLOCK_SIZE;
+    uint64_t offset = inode_number % BLOCK_SIZE;
 
     // Reads the block storing the inode_number
+    char block_buffer[BLOCK_SIZE];
+
+    if (storage_read_block(inode_block, block_buffer) == -1) {
+        return -1;
+    }
 
     // Find the inode_number entry within the block
+    inode_t *entry = (inode_t *) (block_buffer + offset);
 
     // If (from + how_many) is bigger than the file size, you are trying to write past the end of the file:
     // in this case, call the ifile_grow() function to resize the file.
+    if (to + how_many > entry->size) {
+        ifile_grow(entry, to + how_many);
+    }
 
     // Otherwise, read the inode's head_pointer_block, and call
     // the pointers_write() function, which will overwrite all necessary file's blocks
+    pointers_write((pointer_block_t *)entry->head_pointer_block, buffer, how_many, to);
+
+    return 0;
 }
 
 int pointers_write(pointer_block_t *pointers, char *buffer, uint64_t how_many, uint64_t to) {
