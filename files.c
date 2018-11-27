@@ -54,32 +54,68 @@ void format() {
     bitmap_init(number_inode_blocks, number_bitmap_blocks, NUM_BLOCKS);
 }
 
-// TODO
 int ifile_create(uint64_t inode_number) {
     // If the inode_number is bigger than the maximum inode number,
     // return error
+    if (inode_number > MAX_FILES) {
+        return -1;
+    }
 
     // Calculate the block storing the inode_number
     // Calculate the offset within the block containing the inode_number
+    uint64_t inode_block = inode_number / BLOCK_SIZE;
+    uint64_t offset = inode_number % BLOCK_SIZE;
 
     // Reads the block storing the inode_number
+    char buffer[BLOCK_SIZE];
+
+    if (storage_read_block(inode_block, buffer) == -1) {
+        return -1;
+    }
 
     // Find the inode_number entry within the block
+    inode_t *entry = (inode_t *) (buffer + offset);
 
     // Update the inode:
     //  a) Set the file size to zero
     //  b) Set the used flags to true
     //  c) Allocate a new block using bitmap_allocate_block(), and set the inode's head_pointer_block to point to it
     //     This block will be the (unique) indirect block containing all the file's disk blocks.
+    entry->size = 0;
+    entry->flags_used = 1;
+    uint64_t head_block_number = (uint64_t) bitmap_allocate_block();
+    if (head_block_number == -1) {
+        return -1;
+    }
+    entry->head_pointer_block = (uint64_t) (storage + (head_block_number * BLOCK_SIZE));
 
     // Writes the block storing the inode_number back to disk, since we made changes on it
+    if (storage_write_block(inode_block, buffer) == -1) {
+        return -1;
+    }
 
     // Reads the block containing the inode's head_pointer_block
+    if (storage_read_block(head_block_number, buffer) == -1) {
+        return -1;
+    }
 
     // Zeroes all entries, except the first, which should point to a newly allocated DATA block
     // (again found by bitmap_allocate_block()) that stores the first block of the file's DATA.
+    for (int i = 1; i < 512; ++i) {
+        ((pointer_block_t *) buffer)->entry[i] = 0;
+    }
+    uint64_t data_block_number = (uint64_t) bitmap_allocate_block();
+    if (data_block_number == -1) {
+        return -1;
+    }
+    ((pointer_block_t *) buffer)->entry[0] = (uint64_t) (storage + (data_block_number * BLOCK_SIZE));
 
     // Writes the block containing the inode's head_pointer_block
+    if (storage_write_block(head_block_number, buffer) == -1) {
+        return -1;
+    }
+
+    return 0;
 }
 
 int ifile_grow(inode_t *inode, uint64_t new_size) {
@@ -114,20 +150,33 @@ int ifile_grow(inode_t *inode, uint64_t new_size) {
     return 0;
 }
 
-// TODO
 int ifile_read(uint64_t inode_number, char *buffer, uint64_t how_many, uint64_t from) {
     // Calculate the block storing the inode_number
     // Calculate the offset within the block containing the inode_number
+    uint64_t inode_block = inode_number / BLOCK_SIZE;
+    uint64_t offset = inode_number % BLOCK_SIZE;
 
     // Reads the block storing the inode_number
+    char block_buffer[BLOCK_SIZE];
+
+    if (storage_read_block(inode_block, block_buffer) == -1) {
+        return -1;
+    }
 
     // Find the inode_number entry within the block
+    inode_t *entry = (inode_t *) (block_buffer + offset);
 
     // If (from + how_many) is bigger than the file size, you are trying to read past the end of the file:
     // in this case, return -1
+    if (from + how_many > entry->size) {
+        return -1;
+    }
 
     // Otherwise, read the inode's head_pointer_block, and call
     // the pointers_read() function, which will read all the necessary file's blocks
+    pointers_read((pointer_block_t *)entry->head_pointer_block, buffer, how_many, from);
+
+    return 0;
 }
 
 int pointers_read(pointer_block_t *pointers, char *buffer, uint64_t how_many, uint64_t from) {
@@ -177,7 +226,6 @@ int pointers_read(pointer_block_t *pointers, char *buffer, uint64_t how_many, ui
     return 0;
 }
 
-// TODO
 int ifile_write(uint64_t inode_number, void *buffer, uint64_t how_many, uint64_t to) {
     // Calculate the block storing the inode_number
     // Calculate the offset within the block containing the inode_number
@@ -193,7 +241,6 @@ int ifile_write(uint64_t inode_number, void *buffer, uint64_t how_many, uint64_t
     // the pointers_write() function, which will overwrite all necessary file's blocks
 }
 
-// TODO
 int pointers_write(pointer_block_t *pointers, char *buffer, uint64_t how_many, uint64_t to) {
     // Block number and offset within a block for the first block
     // Block number and offset within a block for the last block
