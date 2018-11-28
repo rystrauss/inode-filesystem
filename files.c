@@ -274,7 +274,7 @@ int pointers_write(pointer_block_t *pointers, char *buffer, uint64_t how_many, u
         //   Read the block
         storage_read_block(pointers->entry[first_block_number], block);
         //   Update the appropriate bytes into the block
-        memcpy(buffer, block + first_block_offset, how_many);
+        memcpy(block + first_block_offset, buffer, how_many);
         //   Write the block back to disk since we made changes on it
         storage_write_block(pointers->entry[first_block_number], block);
 
@@ -287,7 +287,7 @@ int pointers_write(pointer_block_t *pointers, char *buffer, uint64_t how_many, u
 
     // Read/Update/Write first block
     storage_read_block(pointers->entry[first_block_number], block);
-    memcpy(buffer, block + first_block_offset, BLOCK_SIZE - first_block_offset);
+    memcpy(block + first_block_offset, buffer, BLOCK_SIZE - first_block_offset);
     storage_write_block(pointers->entry[first_block_number], block);
 
     // Read/Update/Write intermediate blocks
@@ -295,7 +295,7 @@ int pointers_write(pointer_block_t *pointers, char *buffer, uint64_t how_many, u
 
     for (int i = first_block_number + 1; i <= last_block_number - 1; i++) {
         storage_read_block(pointers->entry[i], block);
-        memcpy(buffer + position, block, BLOCK_SIZE);
+        memcpy(block, buffer + position, BLOCK_SIZE);
         storage_write_block(pointers->entry[i], block);
 
         position += BLOCK_SIZE;
@@ -303,7 +303,7 @@ int pointers_write(pointer_block_t *pointers, char *buffer, uint64_t how_many, u
 
     // Read/Update/Write last block
     storage_read_block(pointers->entry[last_block_number], block);
-    memcpy(buffer + position, block, last_block_offset);
+    memcpy(block, buffer + position, last_block_offset);
     storage_write_block(pointers->entry[last_block_number], block);
 
     return 0;
